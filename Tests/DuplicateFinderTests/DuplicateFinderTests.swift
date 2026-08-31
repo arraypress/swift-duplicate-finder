@@ -141,4 +141,21 @@ final class DuplicateFinderTests: XCTestCase {
         XCTAssertEqual(try Hashing.fullHash(of: pa.path), try Hashing.fullHash(of: pc.path))
         _ = a; _ = b
     }
+
+    func testKeepPolicyTieBreaksAlone() {
+        // The policy pinned on hand-built records — no filesystem, no scan.
+        func record(_ path: String, at t: TimeInterval) -> FileRecord {
+            FileRecord(path: path, size: 1, modified: Date(timeIntervalSince1970: t), device: 1, inode: 1)
+        }
+        let sameTime = [record("/x/aaaa", at: 100), record("/x/b", at: 100)]
+        XCTAssertEqual(KeepPolicy.survivor(of: sameTime, under: .newest).path, "/x/b",
+                       "equal dates fall back to the shorter path")
+        let staggered = [record("/old/a", at: 100), record("/mid/bbbbbbbbbb", at: 200), record("/new/c", at: 300)]
+        XCTAssertEqual(KeepPolicy.survivor(of: staggered, under: .oldest).path, "/old/a")
+        XCTAssertEqual(KeepPolicy.survivor(of: staggered, under: .newest).path, "/new/c")
+        let lexical = [record("/x/b", at: 100), record("/y/a", at: 100)]
+        XCTAssertEqual(KeepPolicy.survivor(of: lexical, under: .shortestPath).path, "/x/b")
+        XCTAssertEqual(KeepPolicy.removable(of: staggered, under: .newest).map(\.path).sorted(),
+                       ["/mid/bbbbbbbbbb", "/old/a"])
+    }
 }

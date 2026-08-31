@@ -25,16 +25,11 @@ public struct DuplicateGroup: Codable, Sendable {
 
     /// The copy a rule keeps.
     public func survivor(under rule: KeepRule) -> FileRecord {
-        switch rule {
-        case .oldest: return files.first!
-        case .newest: return files.max { ($0.modified, $1.path.count) < ($1.modified, $0.path.count) }!
-        case .shortestPath: return files.min { ($0.path.count, $0.path) < ($1.path.count, $1.path) }!
-        }
+        KeepPolicy.survivor(of: files, under: rule)
     }
 
     /// Every copy the rule lets go.
     public func removable(under rule: KeepRule) -> [FileRecord] {
-        let keep = survivor(under: rule)
-        return files.filter { $0.path != keep.path }
+        KeepPolicy.removable(of: files, under: rule)
     }
 }
