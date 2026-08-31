@@ -4,81 +4,11 @@
 //
 //  Created by David Sherlock on 2026.
 //
-//  Exact duplicates, honestly: size groups, then edge samples, then full
-//  SHA-256 — a file is only called a copy of another when every byte
-//  agrees. Hard links are collapsed first, because two names for one
-//  file is not a duplicate and deleting one frees nothing.
+//  The scan itself: size groups, edge samples, then full SHA-256 —
+//  a file is only called a copy when every byte agrees.
 //
 
 import Foundation
-
-/// How to choose the copy that stays.
-public enum KeepRule: String, CaseIterable, Codable, Sendable {
-    /// The oldest copy is the original.
-    case oldest
-    /// The newest copy is the one that matters.
-    case newest
-    /// The copy with the shortest path — usually the one in the tidy place.
-    case shortestPath = "shortest-path"
-}
-
-/// Several paths, one content.
-public struct DuplicateGroup: Codable, Sendable {
-
-    /// Bytes per copy.
-    public let size: Int64
-    /// The full SHA-256 every member shares.
-    public let hash: String
-    /// The copies, oldest first (ties: shorter path, then lexical) — at
-    /// least two. Hard links to a member ride inside its record.
-    public let files: [FileRecord]
-
-    /// What deleting all but one copy frees.
-    public var reclaimableBytes: Int64 { size * Int64(files.count - 1) }
-
-    /// The copy a rule keeps.
-    public func survivor(under rule: KeepRule) -> FileRecord {
-        switch rule {
-        case .oldest: return files.first!
-        case .newest: return files.max { ($0.modified, $1.path.count) < ($1.modified, $0.path.count) }!
-        case .shortestPath: return files.min { ($0.path.count, $0.path) < ($1.path.count, $1.path) }!
-        }
-    }
-
-    /// Every copy the rule lets go.
-    public func removable(under rule: KeepRule) -> [FileRecord] {
-        let keep = survivor(under: rule)
-        return files.filter { $0.path != keep.path }
-    }
-}
-
-/// What a scan found and how much it looked at.
-public struct DuplicateReport: Codable, Sendable {
-
-    /// Every duplicate group, biggest reclaimable first.
-    public let groups: [DuplicateGroup]
-    /// Candidate files walked (after size and exclusion filters).
-    public let scannedFiles: Int
-    /// Their bytes.
-    public let scannedBytes: Int64
-    /// Bytes actually read for full hashes — usually far less than scanned.
-    public let hashedBytes: Int64
-
-    /// What deleting every extra copy would free.
-    public var reclaimableBytes: Int64 { groups.reduce(0) { $0 + $1.reclaimableBytes } }
-    /// The number of removable copies across all groups.
-    public var duplicateFiles: Int { groups.reduce(0) { $0 + $1.files.count - 1 } }
-}
-
-/// Where a scan is, for a progress bar.
-public struct ScanProgress: Sendable {
-    /// `walking`, `sampling` or `hashing`.
-    public let phase: String
-    /// Items done in this phase.
-    public let completed: Int
-    /// Items the phase has in all; `0` while unknown.
-    public let total: Int
-}
 
 /// The scan itself.
 public enum DuplicateFinder {
@@ -201,32 +131,5 @@ public enum DuplicateFinder {
         }
         groups.sort { ($0.reclaimableBytes, $1.hash) > ($1.reclaimableBytes, $0.hash) }
         return DuplicateReport(groups: groups, scannedFiles: all.count, scannedBytes: scannedBytes, hashedBytes: hashedBytes)
-    }
-}
-
-/// What a deletion would do, before it does it.
-public struct DeletionPlan: Codable, Sendable {
-
-    /// One group's fate.
-    public struct Entry: Codable, Sendable {
-        /// The copy that stays.
-        public let keep: FileRecord
-        /// The copies that go.
-        public let remove: [FileRecord]
-    }
-
-    /// Every group with something to remove.
-    public let entries: [Entry]
-
-    /// Bytes freed if the plan is carried out.
-    public var bytes: Int64 { entries.reduce(0) { $0 + $1.remove.reduce(0) { $0 + $1.size } } }
-    /// Files removed if the plan is carried out.
-    public var count: Int { entries.reduce(0) { $0 + $1.remove.count } }
-
-    /// The plan a report and a rule imply.
-    public static func make(from report: DuplicateReport, keep rule: KeepRule) -> DeletionPlan {
-        DeletionPlan(entries: report.groups.map {
-            Entry(keep: $0.survivor(under: rule), remove: $0.removable(under: rule))
-        })
     }
 }

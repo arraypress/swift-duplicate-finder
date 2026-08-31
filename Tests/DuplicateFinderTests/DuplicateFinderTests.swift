@@ -118,4 +118,27 @@ final class DuplicateFinderTests: XCTestCase {
         let raised = ScanOptions(minimumBytes: 4 << 20)
         XCTAssertEqual(try DuplicateFinder.find(in: [root], options: raised).groups.count, 0)
     }
+
+    /// The two hashes carry the honesty: identical files agree on both;
+    /// same edges with a different middle pass the cheap gate and fail
+    /// the full one — exactly the case the edge sample exists to defer.
+    func testEdgeHashDefersAndFullHashDecides() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hash-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let edge = 64 << 10
+        var a = Data(repeating: 0xAB, count: edge) + Data(repeating: 0x01, count: edge) + Data(repeating: 0xCD, count: edge)
+        var b = Data(repeating: 0xAB, count: edge) + Data(repeating: 0x02, count: edge) + Data(repeating: 0xCD, count: edge)
+        let pa = dir.appendingPathComponent("a.bin"), pb = dir.appendingPathComponent("b.bin"), pc = dir.appendingPathComponent("c.bin")
+        try a.write(to: pa); try b.write(to: pb); try a.write(to: pc)
+        let size = Int64(a.count)
+        let ea = try Hashing.edgeHash(of: pa.path, size: size)
+        let eb = try Hashing.edgeHash(of: pb.path, size: size)
+        let ec = try Hashing.edgeHash(of: pc.path, size: size)
+        XCTAssertEqual(ea, eb, "same edges must pass the cheap gate together")
+        XCTAssertEqual(ea, ec)
+        XCTAssertNotEqual(try Hashing.fullHash(of: pa.path), try Hashing.fullHash(of: pb.path), "the middle differs; only the full hash may say so")
+        XCTAssertEqual(try Hashing.fullHash(of: pa.path), try Hashing.fullHash(of: pc.path))
+        _ = a; _ = b
+    }
 }
