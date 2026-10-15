@@ -142,6 +142,16 @@ final class DuplicateFinderTests: XCTestCase {
         _ = a; _ = b
     }
 
+    func testOrdinaryFilesAreNotPlaceholders() throws {
+        // A real dataless file needs iCloud Drive to make; this pins the
+        // check's other half — a file on disk is never mistaken for one.
+        let file = root.appendingPathComponent("local.bin")
+        try Data(repeating: 7, count: 10).write(to: file)
+        XCTAssertFalse(Placeholder.isDataless(file.path))
+        XCTAssertFalse(Placeholder.isDataless(root.path))
+        XCTAssertFalse(Placeholder.isDataless(root.appendingPathComponent("missing").path))
+    }
+
     func testKeepPolicyTieBreaksAlone() {
         // The policy pinned on hand-built records — no filesystem, no scan.
         func record(_ path: String, at t: TimeInterval) -> FileRecord {

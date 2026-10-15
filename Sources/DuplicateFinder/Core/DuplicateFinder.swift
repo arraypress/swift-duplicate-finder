@@ -26,6 +26,12 @@ public enum DuplicateFinder {
                                                   options: walkOptions) else { continue }
             for case let url as URL in walker {
                 let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey])
+                // An iCloud placeholder holds no bytes here: hashing it would
+                // download it, and listing a placeholder folder downloads that.
+                if Placeholder.isDataless(url.path) {
+                    if values?.isDirectory == true { walker.skipDescendants() }
+                    continue
+                }
                 if values?.isDirectory == true {
                     if options.excludedDirectoryNames.contains(url.lastPathComponent) { walker.skipDescendants() }
                     continue

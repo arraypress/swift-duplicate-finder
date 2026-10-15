@@ -16,6 +16,7 @@ for group in report.groups {
 - 🎯 **Exact means exact** — a file is a duplicate only when its full SHA-256 matches; size and edge samples merely narrow the field
 - ⚡ **Reads far less than it looks at** — size groups first (free), then the first and last 64 KB (cheap), and only survivors get the full streaming hash; nothing is ever loaded whole, so a 10 GB file passes in megabyte bites
 - 🔗 **Hard links are not duplicates** — two names with one inode collapse into one record carrying its other names; deleting one frees nothing and the report says so
+- ☁️ **Never downloads to compare** — iCloud placeholders (dataless files) are skipped, and a placeholder folder is never listed: reading either would pull it down from iCloud
 - 🚫 **Skips where copies are the point** — `.git`, `node_modules`, `.build`, caches and friends, by default and configurably
 - 📐 **Deterministic** — the same tree reports the same groups in the same order, files oldest-first within each
 - 🗑️ **Plans, doesn't delete** — `DeletionPlan` says what a keep rule (`oldest`, `newest`, `shortest-path`) would remove and what it frees; acting on it is the caller's job
